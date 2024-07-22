@@ -5,36 +5,299 @@ local DR = {}
 local ADDON_NAME = "AIODeathRoll"
 local COINAGE_MAX = 2147483647
 local PLAYER_EVENT_ON_COMMAND  = 42 -- (event, player, command, chatHandler) - player is nil if command used from console. Can return false
+local MAIL_STATIONERY_GM = 61
 
 local ADDON_NAME = "AIODeathRoll"
 
-function DRHandlers.StartPlay(player, bet)
-    -- PrintInfo("DRHandlers.StartPlay received")
-    -- local symbol1, symbol2, symbol3 = GenerateSymbols()
-    -- local validBet = SM.Currency[SM.Config.currency].VerifyAmount(player, bet)
-    -- if not validBet then
-    --     return
-    -- end
-    -- -- calculate payout
-    -- local payout = CalculatePayout(bet, symbol1, symbol2, symbol3)
-    -- local guid = player:GetGUID()
-    -- -- save game to db
-    -- if payout > 0 or not SM.Config.server.saveOnlyWinnerstoDb then
-    --     local combination = string.format('%s-%s-%s', symbol1, symbol2, symbol3)
-    --     local query = string.format("INSERT INTO `%s`.`slot_machine` (accountId, combination, bet, payout, paid) VALUES(%d, '%s', %d, %d, %d);",
-    --         SM.Config.server.customDbName,
-    --         player:GetAccountId(), combination, bet, payout, (payout > 0) and 0 or 1)
-    --     CharDBExecute(query)
-    -- end
-    -- SM.Currency[SM.Config.currency].TakePayment(player, bet)
-    -- AIO.Handle(player, ADDON_NAME, "StartSpin", symbol1, symbol2, symbol3, bet)
+DR.Config = {
+    -- timedEventDelay = 30000, -- in milliseconds
+    -- timeOut = 30000, -- games without rolls for this long will time out
+    timedEventDelay = 1000, -- in milliseconds
+    timeOut = 10000, -- games without rolls for this long will time out
+    -- startRollMin = 1000,
+    startRollMin = 2,
+    removeGoldAtStart = true,
+    mail = {
+        senderGUID = 1, -- Low GUID of the sender
+        stationary = MAIL_STATIONERY_GM,
+        -- %s player name
+        body = "Greetings %s\n\nWe were unable to add your winnings directly to your character. We have sent it to you via mail instead\n\nThank you for playing!\n\nBest regards,\nDeathRoll",
+        subject = "Your Winnings!", -- %s player name
+    },
+}
+
+local State = {
+    PENDING = 1,
+    PROGRESS = 2,
+}
+
+local games = {}
+
+local function DoPayoutGold(player, payout)
+    if (payout + player:GetCoinage()) > COINAGE_MAX then
+        SendMail(DR.Config.mail.subject, string.format(DR.Config.mail.body, player:GetName()),
+            player:GetGUIDLow(), DR.Config.mail.senderGUID, DR.Config.mail.stationary, 0, payout)
+        AIO.Handle(player, ADDON_NAME, "SentPayoutByMail")
+    else
+        player:ModifyMoney(payout)
+    end
+end
+
+local function eq(guid1, guid2)
+    return tostring(guid1) == tostring(guid2)
+end
+
+-- handle games by time out
+local function OnTimedEventCheckTimeout(eventId, delay, repeats)
+    local toBeRemoved = {}
+    for i, game in ipairs(games) do
+        if game then
+            -- check last roll
+            if game.state == State.PROGRESS and game.rolls and (#game.rolls > 0) then
+                local previousRoll = game.rolls[1]
+                local timeDiff = GetTimeDiff(previousRoll.time)
+                if timeDiff > DR.Config.timeOut then
+                    -- finish game and award last rolled player as winner
+                    local player
+                    local otherPlayer
+                    if (eq(game.target, previousRoll.player)) then
+                        print("DEBUG2")
+                        player = GetPlayerByGUID(game.target)
+                        otherPlayer = GetPlayerByGUID(game.challenger)
+                    else
+                        player = GetPlayerByGUID(game.challenger)
+                        otherPlayer = GetPlayerByGUID(game.target)
+                    end
+                    local wager = game.wager
+                    if DR.Config.removeGoldAtStart then
+                        DoPayoutGold(otherPlayer, 2*wager)
+                    else
+                        DoPayoutGold(otherPlayer, wager)
+                        if (player:GetCoinage() < wager) then
+                            PrintError("Player did not have enough coinage to pay other player!\nConsider enabling Config.removeGoldAtStart")
+                        end
+                        player:ModifyMoney(-wager)
+                    end
+                    AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
+                    AIO.Handle(player, ADDON_NAME, "YouLose")
+                    table.insert(toBeRemoved, i)
+                end
+            else
+                local timeDiff = GetTimeDiff(game.time)
+                -- check if timeout
+                if timeDiff > DR.Config.timeOut then
+                    -- cancel game
+                    if game.state == State.PROGRESS then
+                        -- no winners
+                        if DR.Config.removeGoldAtStart then
+                            local wager = game.wager
+                            local player = GetPlayerByGUID(game.target)
+                            local otherPlayer = GetPlayerByGUID(game.challenger)
+                            DoPayoutGold(player, wager)
+                            DoPayoutGold(otherPlayer, wager)
+                            AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Timeout! Refunded money")
+                            AIO.Handle(otherPlayer, ADDON_NAME, "ChallengeRequestDenied", "Timeout! Refunded money")
+                        else
+                            AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Timeout!")
+                            AIO.Handle(otherPlayer, ADDON_NAME, "ChallengeRequestDenied", "Timeout!")
+                        end
+                    else
+                        local otherPlayer = GetPlayerByGUID(game.challenger)
+                        AIO.Handle(otherPlayer, ADDON_NAME, "ChallengeRequestDenied", "Timeout Pending!")
+                    end
+                    table.insert(toBeRemoved, i)
+                end
+            end
+        end
+    end
+    -- remove games
+    for i = #toBeRemoved, 1, -1 do
+        table.remove(games, toBeRemoved[i])
+    end
+end
+
+function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
+    local playerGUID = player:GetGUID()
+    for i, game in ipairs(games) do
+        if game and (eq(game.target,  playerGUID) or eq(game.challenger, playerGUID)) then
+            -- found game
+            local roll = {
+                player = playerGUID,
+                result = rollResult,
+                min = minRoll,
+                max = maxRoll,
+                time = GetCurrTime(),
+            }
+            if not game.rolls then
+                -- first roll
+                -- verify roll
+                if not eq(maxRoll, game.startRoll) or not eq(minRoll, 1) then
+                    AIO.Handle(player, ADDON_NAME, "RollMessage", string.format("Expecting: /roll %d", game.startRoll))
+                    return
+                end
+                games[i].rolls = {roll}
+            else
+                local previousRoll = game.rolls[1]
+                -- verify roll
+                if not eq(maxRoll, previousRoll.result) or not eq(minRoll, 1) then
+                    AIO.Handle(player, ADDON_NAME, "RollMessage", string.format("Expecting: /roll %d", previousRoll.result))
+                    return
+                end
+                -- add roll
+                table.insert(games[i].rolls, 1, roll)
+            end
+            -- find
+            local otherPlayer
+            if (eq(game.target, playerGUID)) then
+                otherPlayer = GetPlayerByGUID(game.challenger)
+            else
+                otherPlayer = GetPlayerByGUID(game.target)
+            end
+            -- end game or continue
+            if eq(rollResult, 1) then
+                -- end game
+                local wager = game.wager
+
+                if DR.Config.removeGoldAtStart then
+                    DoPayoutGold(otherPlayer, 2*wager)
+                else
+                    DoPayoutGold(otherPlayer, wager)
+                    if (player:GetCoinage() < wager) then
+                        PrintError("Player did not have enough coinage to pay other player!\nConsider enabling Config.removeGoldAtStart")
+                    end
+                    player:ModifyMoney(-wager)
+                end
+                AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
+                AIO.Handle(player, ADDON_NAME, "YouLose")
+                table.remove(games, i)
+            else
+                -- continue game
+                AIO.Handle(otherPlayer, ADDON_NAME, "YourTurn", rollResult)
+            end
+            return
+        end
+    end
+    PrintError("Game no longer found!")
+end
+
+function DRHandlers.RequestChallenge(player, guid, wager, startRoll)
+    -- Check if  guid is player
+    local target = GetPlayerByGUID(guid)
+    if not target then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target must be player!")
+        return
+    end
+    local playerGUID = player:GetGUID()
+    -- Check if target or player already has game
+    for _, game in pairs(games) do
+        if game and (eq(game.target,  target) or eq(game.challenger, target)) then
+            AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target has pending game or is already playing!")
+            return
+        end
+        if game and (eq(game.target,  playerGUID) or eq(game.challenger, playerGUID)) then
+            AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "You already have pending game or are already playing!")
+            return
+        end
+    end
+    -- Check startRoll
+    if startRoll < DR.Config.startRollMin then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", string.format("Start roll too low, must be atleast %d", DR.Config.startRollMin))
+        return
+    end
+    -- Check balances
+    local coinagePlayer = player:GetCoinage()
+    if coinagePlayer < wager then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "You do not have enough money!")
+        return
+    end
+    local coinageTarget = target:GetCoinage()
+    if coinageTarget < wager then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target does not have enough money!")
+        return
+    end
+    local newGame = {
+        challenger = playerGUID,
+        target = guid,
+        wager = wager,
+        startRoll = startRoll,
+        state = State.PENDING,
+        time = GetCurrTime()
+    }
+    table.insert(games, 1, newGame)
+    -- minus wager from each player
+    AIO.Handle(player, ADDON_NAME, "ChallengeRequestPending")
+    AIO.Handle(target, ADDON_NAME, "ChallengeReceived", player:GetName(), wager, startRoll)
 end
 
 local function OnCommand(event, player, command)
     if command == "dr" then
+        print("DR")
         AIO.Handle(player, ADDON_NAME, "ShowFrame")
+        return false
+    end
+    if command == "draccept" then
+        print("draccept")
+        -- accepted a pending request
+        -- check if player has pending
+        -- check if challenger is online
+        -- find game where player is challenger
+        local targetGUID = player:GetGUID()
+        local foundGame = false
+        for i, game in ipairs(games) do
+            if game and eq(game.target, targetGUID) then
+                -- found game
+                foundGame = true
+                -- check if guy is online
+                local challenger = GetPlayerByGUID(game.challenger)
+                if not challenger then
+                    PrintError("SOMETHING WENT WRONG")
+                    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Could not find challenger!")
+                    return
+                end
+                -- Check isAlive
+                if not (challenger:IsAlive() and player:IsAlive()) then
+                    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "One of the players is dead!")
+                    AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "One of the players is dead!")
+                    return
+                end
+                -- Check combat
+                if challenger:IsInCombat() or player:IsInCombat() then
+                    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "One of the players is in combat!")
+                    AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "One of the players is in combat!")
+                    return
+                end
+                -- Check balances
+                local coinagePlayer = player:GetCoinage()
+                if coinagePlayer < game.wager then
+                    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Challengee does not have enough money!")
+                    AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "Challengee does not have enough money!")
+                    return
+                end
+                local coinageTarget = challenger:GetCoinage()
+                if coinageTarget < game.wager then
+                    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Challenger does not have enough money!")
+                    AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "Challengee does not have enough money!")
+                    return
+                end
+                -- send accepted request to both players
+                AIO.Handle(player, ADDON_NAME, "StartGame", challenger:GetName(), game.wager, game.startRoll, false) -- rolls second
+                AIO.Handle(challenger, ADDON_NAME, "StartGame", challenger:GetName(), game.wager, game.startRoll, true) -- rolls first
+                -- start game
+                games[i].time = GetCurrTime()
+                games[i].state = State.PROGRESS
+                if DR.Config.removeGoldAtStart then
+                    challenger:ModifyMoney(-game.wager)
+                    player:ModifyMoney(-game.wager)
+                end
+            end
+        end
+        if not foundGame then
+            AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "No game found to accept!")
+            -- no game found
+        end
         return false
     end
 end
 
 RegisterPlayerEvent(PLAYER_EVENT_ON_COMMAND, OnCommand)
+CreateLuaEvent(OnTimedEventCheckTimeout, DR.Config.timedEventDelay, 0) -- infinite
