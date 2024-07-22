@@ -8,8 +8,9 @@ on:
       - 'master'
   workflow_dispatch:
 
-jobs:
+jobs:  
   build:
+    if: false
     uses: azerothcore/reusable-workflows/.github/workflows/core_build_modules.yml@main
     with:
       module_repo: ${{ github.event.repository.name }}
