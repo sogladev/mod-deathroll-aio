@@ -10,7 +10,6 @@ local MAIL_STATIONERY_GM = 61
 local ADDON_NAME = "AIODeathRoll"
 
 DR.Config = {
-    startRollMin = 2, -- default: 1000
     removeGoldAtStart = true,
     mail = {
         senderGUID = 1, -- Low GUID of the sender
@@ -19,8 +18,10 @@ DR.Config = {
         body = "Greetings %s\n\nWe were unable to add your winnings directly to your character. We have sent it to you via mail instead\n\nThank you for playing!\n\nBest regards,\nDeathRoll",
         subject = "Your Winnings!", -- %s player name
     },
-    -- timedEventDelay = 120000, -- in milliseconds, delay between clean up jobs
+    timedEventDelay = 30000, -- in milliseconds, delay between clean up jobs
     timeOut = 30000, -- in milliseconds, when cleanup job runs, games without rolls for this long will time out
+    -- Below need to match client
+    startRollMin = 2, -- default: 1000
 }
 
 local State = {
@@ -230,8 +231,26 @@ function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll)
     }
     table.insert(games, 1, newGame)
     -- minus wager from each player
-    AIO.Handle(player, ADDON_NAME, "ChallengeRequestPending")
+    AIO.Handle(player, ADDON_NAME, "ChallengeRequestPending", target:GetName())
     AIO.Handle(target, ADDON_NAME, "ChallengeReceived", player:GetName(), wager, startRoll)
+end
+
+local function HandleDeclineChallenge(player)
+    -- cleanup old games
+    OnTimedEventCheckTimeout()
+    local targetGUID = player:GetGUID()
+    local i = FindGame(targetGUID)
+    if not i then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "No game found to decline!")
+        return
+    end
+    local game = games[i]
+    -- send deny request to both players
+    local challenger = GetPlayerByGUID(game.challenger)
+    AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Challenge was declined!")
+    AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "Challenge was declined!")
+    -- remove game
+    table.remove(games, i)
 end
 
 local function HandleAcceptChallenge(player)
@@ -278,7 +297,7 @@ local function HandleAcceptChallenge(player)
     end
     -- send accepted request to both players
     AIO.Handle(player, ADDON_NAME, "StartGame", challenger:GetName(), game.wager, game.startRoll, false) -- rolls second
-    AIO.Handle(challenger, ADDON_NAME, "StartGame", challenger:GetName(), game.wager, game.startRoll, true) -- rolls first
+    AIO.Handle(challenger, ADDON_NAME, "StartGame", player:GetName(), game.wager, game.startRoll, true) -- rolls first
     -- start game
     games[i].time = GetCurrTime()
     games[i].state = State.PROGRESS
@@ -293,11 +312,15 @@ local function OnCommand(event, player, command)
         AIO.Handle(player, ADDON_NAME, "ShowFrame")
         return false
     end
-    if command == "draccept" then
+    if command == "dra" then
         HandleAcceptChallenge(player)
+        return false
+    end
+    if command == "drd" then
+        HandleDeclineChallenge(player)
         return false
     end
 end
 
 RegisterPlayerEvent(PLAYER_EVENT_ON_COMMAND, OnCommand)
--- CreateLuaEvent(OnTimedEventCheckTimeout, DR.Config.timedEventDelay, 0) -- infinite
+CreateLuaEvent(OnTimedEventCheckTimeout, DR.Config.timedEventDelay, 0) -- infinite

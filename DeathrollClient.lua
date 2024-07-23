@@ -12,9 +12,10 @@ AIO.AddHandlers(ADDON_NAME, DRHandlers)
 
 DR.Config = {
     currency = "gold",
-    startRollMin = 2, -- default: 1000
     startRollIncrement = 100,
 	strings = {
+        challenge = "Challenge",
+        waitingOpponent = "Waiting...",
         addonMsgPrefix = "|TInterface/ICONS/Achievement_BG_killingblow_30:14:14:2:0|t|cfffff800DeathRoll|r",
         targetMustBePlayer = "Target must be a Player!",
         waitingForServerResponse = "Waiting for server response",
@@ -23,6 +24,9 @@ DR.Config = {
         youLost = "No luck. You've lost: %s", -- %s wager formatted
 	},
     showRollsFrame = false,
+    timeBetweenGamesInSeconds = 3, -- after win/lose disable button for this amount
+    -- Below need to match server
+    startRollMin = 2, -- default: 1000
 }
 
 DR.Currency = {
@@ -35,6 +39,7 @@ DR.Currency = {
     },
 }
 
+
 -- print with addon prefix
 function DR.print(message)
     print(DR.Config.strings.addonMsgPrefix .. " " .. message)
@@ -44,6 +49,9 @@ DR.wager = DR.Currency[DR.Config.currency].minimumWager
 DR.startRoll = DR.Config.startRollMin
 DR.roll = DR.startRoll
 DR.waitingForServerResponse = false
+DR.timeBetweenGamesElapsed = 0
+DR.finishedGame = false
+
 
 local State = {
     IDLE = 0,
@@ -95,8 +103,8 @@ wagerInput:SetPoint("TOP", mainFrame.title, "TOP", 0, -40)
 wagerInput:SetSize(65, 25)
 wagerInput:SetText(DR.Currency[DR.Config.currency].ToString(DR.wager))
 
-wagerInput:SetScript("OnEnterPressed", function(self)
-    local betBoxValue = tonumber(self:GetText())
+local function UpdateWagerFromInput()
+    local betBoxValue = tonumber(wagerInput:GetText())
     if betBoxValue then
         local bet = DR.wager
         bet = math.min(betBoxValue*10000, GetMoney())
@@ -105,8 +113,12 @@ wagerInput:SetScript("OnEnterPressed", function(self)
     else
         DR.Currency[DR.Config.currency].SetBetToMin()
     end
-    self:SetText(DR.Currency[DR.Config.currency].ToString(DR.wager))
-    self:ClearFocus()
+    wagerInput:SetText(DR.Currency[DR.Config.currency].ToString(DR.wager))
+    wagerInput:ClearFocus()
+end
+
+wagerInput:SetScript("OnEnterPressed", function()
+    UpdateWagerFromInput()
 end)
 -- mainFrame: wager min button
 local wagerMin = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
@@ -219,7 +231,7 @@ startText:SetText("Start Roll")
 local mainButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
 mainButton:SetSize(140, 40)
 mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
-mainButton:SetText("Challenge")
+mainButton:SetText(DR.Config.strings.challenge)
 mainButton:SetNormalFontObject("GameFontNormalLarge")
 mainButton:SetHighlightFontObject("GameFontHighlightLarge")
 
@@ -262,9 +274,9 @@ end
 
 -- Function to handle system chat messages and detect rolls
 local function OnChatMsgSystem(self, event, msg)
-    -- if DR.state != State.PROGRESS or not DR.IsItMyTurn then
-        -- return
-    -- end
+    if DR.state ~= State.PROGRESS or not DR.isItMyTurn then
+        return
+    end
     local playerName, rollResult, minRoll, maxRoll = msg:match("^(.+) rolls (%d+) %((%d+)%-(%d+)%)")
     if not (playerName and rollResult and minRoll and maxRoll) then
         return
@@ -273,11 +285,12 @@ local function OnChatMsgSystem(self, event, msg)
         AIO.Handle(ADDON_NAME, "Rolled", rollResult, minRoll, maxRoll)
         DR.waitingForServerResponse = true
         DR.isItMyTurn = false
+        mainButton:SetText(DR.Config.strings.waitingOpponent)
+        mainButton:Disable()
     end
-    if playerName and minRoll then
-    -- targetName
-        local rollText = playerName .. " rolls " .. rollResult .. " (" .. minRoll .. "-" .. maxRoll .. ")"
-        if (DR.Config.showRollsFrame) then
+    if (DR.Config.showRollsFrame) then
+        if playerName and minRoll then
+            local rollText = playerName .. " rolls " .. rollResult .. " (" .. minRoll .. "-" .. maxRoll .. ")"
             UpdateRolls(rollText)
         end
     end
@@ -297,8 +310,8 @@ end)
 mainFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 mainFrame:SetScript("OnEvent", OnChatMsgSystem)
 
-
 local function RequestChallenge()
+    UpdateWagerFromInput()
     if DR.waitingForServerResponse then
         DR.print(DR.Config.strings.waitingForServerResponse)
         return false
@@ -318,8 +331,9 @@ end
 
 -- Function to update button text and handle challenge
 local function HandleClick()
-    DR.print("Handle Click")
-    if mainButton:GetText() == "Challenge" then
+    wagerInput:ClearFocus()
+    startInput:ClearFocus()
+    if mainButton:GetText() == DR.Config.strings.challenge then
         DR.print("Handle Challenge")
         RequestChallenge()
     else
@@ -337,27 +351,28 @@ end
 
 function DRHandlers.ChallengeReceived(player, name, wager, startRoll)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
-    DR.print(string.format("You have received a challenge from %s for %s (1-%d)\ntype .draccept to accept this challenge!", name, wagerFormatted, startRoll))
+    DR.print(string.format("You have received a challenge from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
     DR.state = State.RECEIVED
     mainFrame:Show()
 end
 
 function DRHandlers.ChallengeRequestPending(player, name)
-    DR.print("Challenge Request pending!")
+    DR.print(string.format("Challenge Request to %s pending!", name))
     DR.state = State.PENDING
-    mainButton:SetText("Roll")
+    mainButton:SetText(DR.Config.strings.waitingOpponent)
+    mainButton:Disable()
 end
 
 function DRHandlers.ChallengeRequestDenied(player, reason)
     DR.print(string.format("Challenge Request denied! %s", reason))
-    DR.state = State.IDLE
-    DR.waitingForServerResponse = false
+    DR.SetStateToIdle()
 end
 
 function DRHandlers.RollMessage(player, reason)
     DR.print(string.format("RollMessage %s", reason))
     DR.waitingForServerResponse = false
     DR.isItMyTurn = true
+    mainButton:Enable()
 end
 
 function DRHandlers.YourTurn(player, maxRoll)
@@ -365,6 +380,9 @@ function DRHandlers.YourTurn(player, maxRoll)
     DR.print(string.format("/roll %d", maxRoll))
     DR.isItMyTurn = true
     DR.waitingForServerResponse = false
+    DR.roll = maxRoll
+    mainButton:SetText("Roll "..maxRoll)
+    mainButton:Enable()
 end
 
 -- pick a random happy emote from a list
@@ -378,9 +396,11 @@ function DRHandlers.YouWin(player, wager)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
     DR.isItMyTurn = false
     DR.waitingForServerResponse = false
-    DR.state = State.PENDING
+    mainButton:SetText("Won")
+    mainButton:Disable()
     DR.print(string.format(DR.Config.strings.youAreWinner, wagerFormatted))
     DoEmote(GetRandomHappyEmote())
+    DR.finishedGame = true
 end
 
 -- Function to pick a random sad emote from a list
@@ -391,34 +411,76 @@ local function GetRandomSadEmote()
 end
 
 function DRHandlers.YouLose(player, wager)
-    print("YOU LOSE")
-    print("wager")
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
-    print("wagerFormatted")
     DR.isItMyTurn = false
     DR.waitingForServerResponse = false
-    DR.state = State.PENDING
+    mainButton:SetText("Lost")
+    mainButton:Disable()
     DR.print(string.format(DR.Config.strings.youLost, wagerFormatted))
     DoEmote(GetRandomSadEmote())
+    DR.finishedGame = true
 end
+
+mainFrame:SetScript("OnUpdate", function(self, dt)
+        if DR.finishedGame then
+            DR.timeBetweenGamesElapsed = DR.timeBetweenGamesElapsed + dt
+            if (DR.timeBetweenGamesElapsed >= DR.Config.timeBetweenGamesInSeconds) then
+                DR.timeBetweenGamesElapsed = 0
+                DR.SetStateToIdle()
+            end
+        end
+end)
 
 function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
     local startString
+    DR.roll = tonumber(startRoll)
+    -- Disable inputs
+    -- wagerInput:Disable()
+    wagerMin:Disable()
+    wagerIncrement:Disable()
+    -- startInput:Disable()
+    startPlus:Disable()
+    startMin:Disable()
+    --
     if firstRoll then
         DR.isItMyTurn = true
         DR.waitingForServerResponse = false
         startString = string.format("You start first! /roll %d", startRoll)
+        mainButton:SetText("Roll "..startRoll)
+        mainButton:Enable()
     else
+        -- challengee
+        wagerInput:SetText(DR.Currency[DR.Config.currency].ToString(wager))
+        startInput:SetText(startRoll)
+        DR.startRoll = tonumber(startRoll)
         DR.isItMyTurn = false
         DR.waitingForServerResponse = true
         startString = string.format("Waiting for opponent to roll (1-%d)", startRoll)
+        mainButton:SetText(DR.Config.strings.waitingOpponent)
+        mainButton:Disable()
     end
     DR.print(string.format("Starting game against %s for %s (1-%d)!", name, wagerFormatted, startRoll))
     DR.print(DR.Config.strings.gameStartReminder)
     DR.print(startString)
     DR.state = State.PROGRESS
+
 end
 
 -- Show main frame
 mainFrame:Show() -- remove for release
+
+function DR.SetStateToIdle()
+    -- Enable inputs
+    -- wagerInput:Enable()
+    wagerMin:Enable()
+    wagerIncrement:Enable()
+    -- startInput:Enable()
+    startPlus:Enable()
+    startMin:Enable()
+    mainButton:SetText(DR.Config.strings.challenge)
+    mainButton:Enable()
+    DR.state = State.IDLE
+    DR.waitingForServerResponse = false
+    DR.finishedGame = false
+end
