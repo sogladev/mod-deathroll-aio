@@ -6,29 +6,22 @@ local DR = {}
 local ADDON_NAME = "AIODeathRoll"
 local COINAGE_MAX = 2147483647
 local START_ROLL_MAX = 10000
-local ITEM_ID_EOF = 49426
-local width = 200
+-- local ITEM_ID_EOF = 49426
 
 local DRHandlers = {}
 AIO.AddHandlers(ADDON_NAME, DRHandlers)
 
 DR.Config = {
     currency = "gold", -- [item, gold]
-    itemId = ITEM_ID_EOF, -- if using "item" as currency
-    -- startRollMin = 1000,
-    startRollMin = 2,
+    -- itemId = ITEM_ID_EOF, -- if using "item" as currency
+    startRollMin = 2, -- default: 1000
     startRollIncrement = 100,
 	strings = {
-        targetMustBePlayer = "Target must be a Player!",
-		insufficientFunds = "You don't have enough to play",
         addonMsgPrefix = "|TInterface/ICONS/Achievement_BG_killingblow_30:14:14:2:0|t|cfffff800DeathRoll|r",
-        betHigherThanMaxBet = "Bet is too high! Max bet is %s", -- %s bet with icon
-        betMustBeMinimumAmount = "Bet must be at least 1",
-        invalidBetAmount = "Invalid bet amount",
-        sentPayoutByMail = "You have too much money! Your recent winnings have been sent by mail",
-        spinIsAlreadyInProgress = "Spin is already in progress",
+        targetMustBePlayer = "Target must be a Player!",
         waitingForServerResponse = "Waiting for server response",
-        youAreWinner  = "You've won: ",
+        gameStartReminder = "You have 30 seconds between each roll! Good luck!",
+        youAreWinner  = "You've won: %s", -- %s wager formatted
         youLost = "No luck. Try again!",
 	},
 }
@@ -66,7 +59,7 @@ DR.state = State.IDLE
 -- Create main frame
 -- local mainFrame = CreateFrame("Frame", "DeathRollMainFrame", UIParent, "BackdropTemplate")
 local mainFrame = CreateFrame("Frame", "DeathRollMainFrame", UIParent)
-mainFrame:SetSize(width, 200)
+mainFrame:SetSize(200, 200)
 mainFrame:SetBackdrop({
     bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
     edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
@@ -374,8 +367,8 @@ function DRHandlers.RollMessage(player, reason)
 end
 
 function DRHandlers.YourTurn(player, maxRoll)
-    print("YOUR TURN RECEIVED")
-    DR.print(string.format("RollMessage /roll %d", maxRoll))
+    DR.print(string.format("Your opponent rolled %s", maxRoll))
+    DR.print(string.format("/roll %d", maxRoll))
     DR.IsItMyTurn = true
     DR.waitingForServerResponse = false
 end
@@ -389,18 +382,26 @@ end
 
 function DRHandlers.YouWin(player, wager)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
-    DR.print(string.format("YOU WIN! %s", wagerFormatted))
     DR.IsItMyTurn = false
     DR.waitingForServerResponse = false
     DR.state = State.PENDING
+    DR.print(string.format(DR.Config.strings.youAreWinner, wagerFormatted))
     DoEmote(GetRandomHappyEmote())
 end
 
+-- Function to pick a random sad emote from a list
+local function GetRandomSadEmote()
+    local sadEmotes = {"CRY", "SIGH", "SURRENDER", "LAY", "CONGRATULATE"} -- Add more sad emotes as needed
+    local randomIndex = math.random(1, #sadEmotes)
+    return sadEmotes[randomIndex]
+end
+
 function DRHandlers.YouLose(player)
-    DR.print("YOU LOSE")
     DR.IsItMyTurn = false
     DR.waitingForServerResponse = false
     DR.state = State.PENDING
+    DR.print(DR.Config.strings.youLost)
+    DoEmote(GetRandomSadEmote())
 end
 
 function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
@@ -415,7 +416,9 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
         DR.waitingForServerResponse = true
         startString = string.format("Waiting for opponent to roll (1-%d)", startRoll)
     end
-    DR.print(string.format("Start game against %s for %s (1-%d)!\n%s", name, wagerFormatted, startRoll, startString))
+    DR.print(string.format("Starting game against %s for %s (1-%d)!", name, wagerFormatted, startRoll))
+    DR.print(startString)
+    DR.print(DR.Config.strings.gameStartReminder)
     DR.state = State.PROGRESS
 end
 
