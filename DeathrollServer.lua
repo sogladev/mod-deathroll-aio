@@ -178,6 +178,10 @@ function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
         end
         AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
         AIO.Handle(player, ADDON_NAME, "YouLose", wager)
+        if game.mode == "death" then
+            -- player:KillPlayer() -- broken?
+            player:Kill(player, false)
+        end
         table.remove(games, i)
     else
         -- continue game
@@ -185,7 +189,7 @@ function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
     end
 end
 
-function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll)
+function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll, mode)
     -- cleanup old games
     OnTimedEventCheckTimeout()
     -- Check if guid is player
@@ -220,18 +224,29 @@ function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll)
         AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target does not have enough money!")
         return
     end
+    -- Check isAlive
+    if not player:IsAlive() then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "You are dead!")
+        return
+    end
+    -- Check combat
+    if player:IsInCombat() then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "You are in combat!")
+        return
+    end
     local newGame = {
         challenger = playerGUID,
         target = targetGUID,
         wager = wager,
         startRoll = startRoll,
         state = State.PENDING,
-        time = GetCurrTime()
+        time = GetCurrTime(),
+        mode = mode and mode or "normal",
     }
     table.insert(games, 1, newGame)
     -- minus wager from each player
     AIO.Handle(player, ADDON_NAME, "ChallengeRequestPending", target:GetName())
-    AIO.Handle(target, ADDON_NAME, "ChallengeReceived", player:GetName(), wager, startRoll)
+    AIO.Handle(target, ADDON_NAME, "ChallengeReceived", player:GetName(), wager, startRoll, mode)
 end
 
 local function HandleDeclineChallenge(player)

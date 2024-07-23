@@ -6,6 +6,7 @@ local DR = {}
 local ADDON_NAME = "AIODeathRoll"
 local COINAGE_MAX = 2147483647
 local START_ROLL_MAX = 10000
+local SKULL_ICON_MSG = "|TInterface/Icons/INV_Misc_Bone_Skull_01:14:14:2:0|t"
 
 local DRHandlers = {}
 AIO.AddHandlers(ADDON_NAME, DRHandlers)
@@ -257,10 +258,11 @@ skullTexture:SetAllPoints()
 skullButton:SetNormalTexture(skullTexture)
 
 local pushedTexture = skullButton:CreateTexture()
-pushedTexture:SetTexture("Interface\\Icons\\INV_Misc_Bone_Skull_01")
+pushedTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
 pushedTexture:SetAllPoints()
 pushedTexture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly dimmed to indicate the pushed state
 skullButton:SetPushedTexture(pushedTexture)
+skullButton:SetDisabledTexture(pushedTexture)
 -- Tooltip
 skullButton:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -347,7 +349,7 @@ end)
 mainFrame:RegisterEvent("CHAT_MSG_SYSTEM")
 mainFrame:SetScript("OnEvent", OnChatMsgSystem)
 
-local function RequestChallenge()
+local function RequestChallenge(mode)
     UpdateWagerFromInput()
     if DR.waitingForServerResponse then
         DR.print(DR.Config.strings.waitingForServerResponse)
@@ -360,10 +362,11 @@ local function RequestChallenge()
     end
     local guid = UnitGUID("target")
     DR.waitingForServerResponse = true
-    AIO.Handle(ADDON_NAME, "RequestChallenge", tonumber(guid), DR.wager, DR.startRoll)
+    AIO.Handle(ADDON_NAME, "RequestChallenge", tonumber(guid), DR.wager, DR.startRoll, mode)
 end
 
 -- Function to update button text and handle challenge
+
 local function HandleClick()
     wagerInput:ClearFocus()
     startInput:ClearFocus()
@@ -376,21 +379,34 @@ local function HandleClick()
     end
 end
 
+local function HandleClickSkull()
+    wagerInput:ClearFocus()
+    startInput:ClearFocus()
+    DR.print("Handle Challenge To The Death")
+    RequestChallenge("death")
+end
+
 mainButton:SetScript("OnClick", HandleClick)
+skullButton:SetScript("OnClick", HandleClickSkull)
 
 -- Handlers
 function DRHandlers.ShowFrame(player)
     mainFrame:Show()
 end
 
-function DRHandlers.ChallengeReceived(player, name, wager, startRoll)
+function DRHandlers.ChallengeReceived(player, name, wager, startRoll, mode)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
-    DR.print(string.format("You have received a challenge from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
+    if mode == "death" then
+        DR.print(string.format("You have received a challenge".." to the "..SKULL_ICON_MSG.." Death "..SKULL_ICON_MSG.." ".."from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
+    else
+        DR.print(string.format("You have received a challenge from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
+    end
     DR.state = State.RECEIVED
-    mainFrame:Show()
 end
 
 function DRHandlers.ChallengeRequestPending(player, name)
+    skullButton:Disable()
+
     DR.print(string.format("Challenge Request to %s pending!", name))
     DR.state = State.PENDING
     mainButton:SetText(DR.Config.strings.waitingOpponent)
@@ -466,9 +482,14 @@ mainFrame:SetScript("OnUpdate", function(self, dt)
 end)
 
 function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
+    mainFrame:Show()
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
     local startString
     DR.roll = tonumber(startRoll)
+    --
+    skullButton:Hide()
+    mainButton:SetSize(140, 40)
+    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
     -- Disable inputs
     wagerMin:Disable()
     wagerIncrement:Disable()
@@ -506,6 +527,10 @@ mainFrame:Show() -- remove for release
 
 function DR.SetStateToIdle()
     -- Enable inputs
+    mainButton:SetSize(100, 40) -- 140, 40
+    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
+    skullButton:Show()
+    skullButton:Enable()
     wagerInput:ClearFocus()
     startInput:ClearFocus()
     wagerInput:EnableMouse(true)
