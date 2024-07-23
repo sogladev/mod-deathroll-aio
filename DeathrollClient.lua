@@ -234,11 +234,43 @@ startText:SetText("Start Roll")
 
 -- mainFrame: Challenge button
 local mainButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-mainButton:SetSize(140, 40)
-mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
+mainButton:SetSize(100, 40) -- 140, 40
+mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
 mainButton:SetText(DR.Config.strings.challenge)
 mainButton:SetNormalFontObject("GameFontNormalLarge")
 mainButton:SetHighlightFontObject("GameFontHighlightLarge")
+-- restore
+-- skullButton:Show()
+-- mainButton:SetSize(140, 40)
+-- mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
+-- hide
+-- skullButton:Hide()
+-- mainButton:SetSize(100, 40) -- 140, 40
+-- mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
+-- To the death
+local skullButton = CreateFrame("Button", "SkullButton", mainFrame, "UIPanelButtonTemplate")
+skullButton:SetSize(25, 25)
+skullButton:SetPoint("LEFT", mainButton, "RIGHT", 1, 0)
+local skullTexture = skullButton:CreateTexture()
+skullTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
+skullTexture:SetAllPoints()
+skullButton:SetNormalTexture(skullTexture)
+
+local pushedTexture = skullButton:CreateTexture()
+pushedTexture:SetTexture("Interface\\Icons\\INV_Misc_Bone_Skull_01")
+pushedTexture:SetAllPoints()
+pushedTexture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly dimmed to indicate the pushed state
+skullButton:SetPushedTexture(pushedTexture)
+-- Tooltip
+skullButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Challenge to the death!", 1, 1, 1)
+    GameTooltip:Show()
+end)
+
+skullButton:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
 
 if (DR.Config.showRollsFrame) then
 -- Create rolls frame
