@@ -99,7 +99,6 @@ closeButton:SetScript("OnClick", function(self)
     mainFrame:Hide()
 end)
 
-
 -- mainFrame: wager input
 local wagerInput = CreateFrame("EditBox", "WagerInput", mainFrame, "InputBoxTemplate")
 wagerInput:SetAutoFocus(false)
@@ -329,10 +328,7 @@ local function RequestChallenge()
         DR.print(DR.Config.strings.targetMustBePlayer)
         return false
     end
-    local target = UnitName("target") -- DEBUG
     local guid = UnitGUID("target")
-    DR.print(target) -- DEBUG
-    DR.print(guid) -- DEBUG
     DR.waitingForServerResponse = true
     AIO.Handle(ADDON_NAME, "RequestChallenge", tonumber(guid), DR.wager, DR.startRoll)
 end

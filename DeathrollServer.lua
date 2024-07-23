@@ -59,7 +59,6 @@ local function OnTimedEventCheckTimeout(_, _, _) -- eventId, delay, repeats
                     local player
                     local otherPlayer
                     if (eq(game.target, previousRoll.player)) then
-                        print("DEBUG2")
                         player = GetPlayerByGUID(game.target)
                         otherPlayer = GetPlayerByGUID(game.challenger)
                     else
