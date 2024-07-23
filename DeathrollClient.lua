@@ -92,6 +92,14 @@ mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
 -- This enables saving of the position of the frame over reload of the UI or restarting game
 AIO.SavePosition(mainFrame)
 
+-- mainFrame: Close button
+local closeButton = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
+closeButton:SetPoint("LEFT", mainFrame.title, "RIGHT", 25, 0)
+closeButton:SetScript("OnClick", function(self)
+    mainFrame:Hide()
+end)
+
+
 -- mainFrame: wager input
 local wagerInput = CreateFrame("EditBox", "WagerInput", mainFrame, "InputBoxTemplate")
 wagerInput:SetAutoFocus(false)
@@ -405,7 +413,7 @@ end
 
 -- Function to pick a random sad emote from a list
 local function GetRandomSadEmote()
-    local sadEmotes = {"CRY", "SIGH", "SURRENDER", "LAY", "CONGRATULATE"} -- Add more sad emotes as needed
+    local sadEmotes = {"CRY", "SIGH", "SURRENDER", "LAYDOWN", "CONGRATULATE"} -- Add more sad emotes as needed
     local randomIndex = math.random(1, #sadEmotes)
     return sadEmotes[randomIndex]
 end
@@ -436,13 +444,14 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     local startString
     DR.roll = tonumber(startRoll)
     -- Disable inputs
-    -- wagerInput:Disable()
     wagerMin:Disable()
     wagerIncrement:Disable()
-    -- startInput:Disable()
+    wagerInput:ClearFocus()
+    startInput:ClearFocus()
+    wagerInput:EnableMouse(false)
+    startInput:EnableMouse(false)
     startPlus:Disable()
     startMin:Disable()
-    --
     if firstRoll then
         DR.isItMyTurn = true
         DR.waitingForServerResponse = false
@@ -464,7 +473,6 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     DR.print(DR.Config.strings.gameStartReminder)
     DR.print(startString)
     DR.state = State.PROGRESS
-
 end
 
 -- Show main frame
@@ -472,10 +480,12 @@ mainFrame:Show() -- remove for release
 
 function DR.SetStateToIdle()
     -- Enable inputs
-    -- wagerInput:Enable()
+    wagerInput:ClearFocus()
+    startInput:ClearFocus()
+    wagerInput:EnableMouse(true)
+    startInput:EnableMouse(true)
     wagerMin:Enable()
     wagerIncrement:Enable()
-    -- startInput:Enable()
     startPlus:Enable()
     startMin:Enable()
     mainButton:SetText(DR.Config.strings.challenge)
