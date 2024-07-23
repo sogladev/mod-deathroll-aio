@@ -25,7 +25,6 @@ DR.Config = {
         youAreWinner  = "You've won: %s", -- %s wager formatted
         youLost = "No luck. You've lost: %s", -- %s wager formatted
 	},
-    showRollsFrame = false,
     timeBetweenGamesInSeconds = 3, -- after win/lose disable button for this amount
     -- Below need to match server
     startRollMin = 2, -- default: 1000
@@ -273,32 +272,6 @@ if DR.Config.allowToTheDeath then -- create DR.skullButton
     end)
 end -- DR.skullButton end
 
-if (DR.Config.showRollsFrame) then
--- Create rolls frame
-local rollsFrame = CreateFrame("Frame", "DeathRollRollsFrame", mainFrame)
-rollsFrame:SetSize(240, 120)
-rollsFrame:SetPoint("TOP", mainFrame, "BOTTOM", 0, -10)
-rollsFrame:SetBackdrop({
-    bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
-    edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-    tile = true, tileSize = 32, edgeSize = 32,
-    insets = { left = 11, right = 12, top = 12, bottom = 11 }
-})
-rollsFrame:SetBackdropColor(0, 0, 0, 1)
-
-rollsFrame.title = rollsFrame:CreateFontString(nil, "OVERLAY")
-rollsFrame.title:SetFontObject("GameFontNormalMed3")
-rollsFrame.title:SetPoint("TOP", rollsFrame, "TOP", 0, -15)
-rollsFrame.title:SetText("Rolls")
-
--- Rolls text
-local rollsText = rollsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-rollsText:SetPoint("TOP", rollsFrame.title, 2, -10)
-rollsText:SetSize(200, 90)
-rollsText:SetJustifyH("LEFT")
-rollsText:SetText("Rolls will be shown here")
-end -- end RollsFrame
-
 -- Function to update rolls
 local function UpdateRolls(newRoll)
     local text = rollsText:GetText()
@@ -325,12 +298,6 @@ local function OnChatMsgSystem(self, event, msg)
         DR.isItMyTurn = false
         mainButton:SetText(DR.Config.strings.waitingOpponent)
         mainButton:Disable()
-    end
-    if (DR.Config.showRollsFrame) then
-        if playerName and minRoll then
-            local rollText = playerName .. " rolls " .. rollResult .. " (" .. minRoll .. "-" .. maxRoll .. ")"
-            UpdateRolls(rollText)
-        end
     end
 end
 
