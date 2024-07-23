@@ -76,7 +76,7 @@ local function OnTimedEventCheckTimeout(_, _, _) -- eventId, delay, repeats
                         player:ModifyMoney(-wager)
                     end
                     AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
-                    AIO.Handle(player, ADDON_NAME, "YouLose")
+                    AIO.Handle(player, ADDON_NAME, "YouLose", wager)
                     table.insert(toBeRemoved, i)
                 end
             else
@@ -177,7 +177,7 @@ function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
             player:ModifyMoney(-wager)
         end
         AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
-        AIO.Handle(player, ADDON_NAME, "YouLose")
+        AIO.Handle(player, ADDON_NAME, "YouLose", wager)
         table.remove(games, i)
     else
         -- continue game
@@ -196,11 +196,11 @@ function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll)
     end
     -- Check if target or player already has game
     local playerGUID = player:GetGUID()
-    if FindGame(playerGUID) then
+    if FindGame(playerGUID) ~= 0 then
         AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "You already have pending game or are already playing!")
         return
     end
-    if FindGame(targetGUID) then
+    if FindGame(targetGUID) ~= 0 then
         AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target has pending game or is already playing!")
         return
     end
