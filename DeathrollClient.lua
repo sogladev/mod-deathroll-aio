@@ -12,6 +12,7 @@ local DRHandlers = {}
 AIO.AddHandlers(ADDON_NAME, DRHandlers)
 
 DR.Config = {
+    allowToTheDeath = true, -- default: true
     currency = "gold",
     startRollIncrement = 100,
 	strings = {
@@ -235,44 +236,42 @@ startText:SetText("Start Roll")
 
 -- mainFrame: Challenge button
 local mainButton = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-mainButton:SetSize(100, 40) -- 140, 40
-mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
+if DR.Config.allowToTheDeath then
+    mainButton:SetSize(100, 40) -- 140, 40
+    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
+else
+    mainButton:SetSize(140, 40)
+    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
+end
 mainButton:SetText(DR.Config.strings.challenge)
 mainButton:SetNormalFontObject("GameFontNormalLarge")
 mainButton:SetHighlightFontObject("GameFontHighlightLarge")
--- restore
--- skullButton:Show()
--- mainButton:SetSize(140, 40)
--- mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
--- hide
--- skullButton:Hide()
--- mainButton:SetSize(100, 40) -- 140, 40
--- mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
--- To the death
-local skullButton = CreateFrame("Button", "SkullButton", mainFrame, "UIPanelButtonTemplate")
-skullButton:SetSize(25, 25)
-skullButton:SetPoint("LEFT", mainButton, "RIGHT", 1, 0)
-local skullTexture = skullButton:CreateTexture()
-skullTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
-skullTexture:SetAllPoints()
-skullButton:SetNormalTexture(skullTexture)
+if DR.Config.allowToTheDeath then -- create DR.skullButton
+    DR.skullButton = CreateFrame("Button", "DR.skullButton", mainFrame, "UIPanelButtonTemplate")
+    DR.skullButton:SetSize(25, 25)
+    DR.skullButton:SetPoint("LEFT", mainButton, "RIGHT", 1, 0)
+    local skullTexture = DR.skullButton:CreateTexture()
+    skullTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
+    skullTexture:SetAllPoints()
+    DR.skullButton:SetNormalTexture(skullTexture)
 
-local pushedTexture = skullButton:CreateTexture()
-pushedTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
-pushedTexture:SetAllPoints()
-pushedTexture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly dimmed to indicate the pushed state
-skullButton:SetPushedTexture(pushedTexture)
-skullButton:SetDisabledTexture(pushedTexture)
--- Tooltip
-skullButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Challenge to the death!", 1, 1, 1)
-    GameTooltip:Show()
-end)
+    local pushedTexture = DR.skullButton:CreateTexture()
+    pushedTexture:SetTexture("Interface/Icons/INV_Misc_Bone_Skull_01")
+    pushedTexture:SetAllPoints()
+    pushedTexture:SetVertexColor(0.8, 0.8, 0.8) -- Slightly dimmed to indicate the pushed state
+    DR.skullButton:SetPushedTexture(pushedTexture)
+    DR.skullButton:SetDisabledTexture(pushedTexture)
+    -- Tooltip
+    DR.skullButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Challenge to the death!", 1, 1, 1)
+        GameTooltip:Show()
+    end)
 
-skullButton:SetScript("OnLeave", function(self)
-    GameTooltip:Hide()
-end)
+    DR.skullButton:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+end -- DR.skullButton end
 
 if (DR.Config.showRollsFrame) then
 -- Create rolls frame
@@ -378,6 +377,7 @@ local function HandleClick()
         RandomRoll(1, DR.roll)
     end
 end
+mainButton:SetScript("OnClick", HandleClick)
 
 local function HandleClickSkull()
     wagerInput:ClearFocus()
@@ -385,9 +385,9 @@ local function HandleClickSkull()
     DR.print("Handle Challenge To The Death")
     RequestChallenge("death")
 end
-
-mainButton:SetScript("OnClick", HandleClick)
-skullButton:SetScript("OnClick", HandleClickSkull)
+if DR.Config.allowToTheDeath then
+    DR.skullButton:SetScript("OnClick", HandleClickSkull)
+end
 
 -- Handlers
 function DRHandlers.ShowFrame(player)
@@ -405,8 +405,9 @@ function DRHandlers.ChallengeReceived(player, name, wager, startRoll, mode)
 end
 
 function DRHandlers.ChallengeRequestPending(player, name)
-    skullButton:Disable()
-
+    if DR.Config.allowToTheDeath then
+        DR.skullButton:Disable()
+    end
     DR.print(string.format("Challenge Request to %s pending!", name))
     DR.state = State.PENDING
     mainButton:SetText(DR.Config.strings.waitingOpponent)
@@ -472,13 +473,13 @@ function DRHandlers.YouLose(player, wager)
 end
 
 mainFrame:SetScript("OnUpdate", function(self, dt)
-        if DR.finishedGame then
-            DR.timeBetweenGamesElapsed = DR.timeBetweenGamesElapsed + dt
-            if (DR.timeBetweenGamesElapsed >= DR.Config.timeBetweenGamesInSeconds) then
-                DR.timeBetweenGamesElapsed = 0
-                DR.SetStateToIdle()
-            end
+    if DR.finishedGame then
+        DR.timeBetweenGamesElapsed = DR.timeBetweenGamesElapsed + dt
+        if (DR.timeBetweenGamesElapsed >= DR.Config.timeBetweenGamesInSeconds) then
+            DR.timeBetweenGamesElapsed = 0
+            DR.SetStateToIdle()
         end
+    end
 end)
 
 function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
@@ -486,10 +487,11 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
     local startString
     DR.roll = tonumber(startRoll)
-    --
-    skullButton:Hide()
-    mainButton:SetSize(140, 40)
-    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
+    if DR.Config.allowToTheDeath then -- create DR.skullButton
+        DR.skullButton:Hide()
+        mainButton:SetSize(140, 40)
+        mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", 0, 20)
+    end
     -- Disable inputs
     wagerMin:Disable()
     wagerIncrement:Disable()
@@ -527,10 +529,12 @@ mainFrame:Show() -- remove for release
 
 function DR.SetStateToIdle()
     -- Enable inputs
-    mainButton:SetSize(100, 40) -- 140, 40
-    mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
-    skullButton:Show()
-    skullButton:Enable()
+    if DR.Config.allowToTheDeath then -- create DR.skullButton
+        DR.skullButton:Show()
+        DR.skullButton:Enable()
+        mainButton:SetSize(100, 40) -- 140, 40
+        mainButton:SetPoint("BOTTOM", mainFrame, "BOTTOM", -16, 20) -- 0, 20
+    end
     wagerInput:ClearFocus()
     startInput:ClearFocus()
     wagerInput:EnableMouse(true)

@@ -10,7 +10,7 @@ local MAIL_STATIONERY_GM = 61
 local ADDON_NAME = "AIODeathRoll"
 
 DR.Config = {
-    removeGoldAtStart = true,
+    removeGoldAtStart = true, -- default: true
     mail = {
         senderGUID = 1, -- Low GUID of the sender
         stationary = MAIL_STATIONERY_GM,
