@@ -39,7 +39,6 @@ DR.Currency = {
     },
 }
 
-
 -- print with addon prefix
 function DR.print(message)
     print(DR.Config.strings.addonMsgPrefix .. " " .. message)
@@ -51,7 +50,6 @@ DR.roll = DR.startRoll
 DR.waitingForServerResponse = false
 DR.timeBetweenGamesElapsed = 0
 DR.finishedGame = false
-
 
 local State = {
     IDLE = 0,
