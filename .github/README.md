@@ -12,8 +12,12 @@ This is a module compatible for [AzerothCore](http://www.azerothcore.org), [Elun
 - database persistence
 - automatically awards winning player, if winnings are too large then gold is send through ingame mail
 
+ui:
 
-to the death only: 
+![deathroll_ui](https://github.com/user-attachments/assets/1fbe1299-3366-45fc-87c5-6b194272fa46)
+
+
+to the death example: 
 
 https://github.com/user-attachments/assets/50a748df-52c2-429a-90e5-02596d377733
 
@@ -25,15 +29,16 @@ removeGoldAtStart: enable to take gold from players upon start of the game
 enableDB: enable database persistence, if removeGoldAtStart is enabled, on restart will refund games that were still in progress
 customize strings
 allowToTheDeath: enable/hide skull button
+set timeouts: how much time is allowed between rolls 
 
 ## Tested with
 AzerothCore
 ElunaTrinityWotlk
 
 ## How to play:
-`.dr` to open the window
-`.dra` to accept a challenge
-`.drd` to decline a challenge, challenge can automatically timeout and decline
+- `.dr` to open the window
+- `.dra` to accept a challenge
+- `.drd` to decline a challenge, challenge can automatically timeout and decline
 
 Target another player and click "Challenge" or the "Skull". Skull will do "Challenge" and kill the losing player
 
