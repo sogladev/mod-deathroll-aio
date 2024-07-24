@@ -335,10 +335,10 @@ local function HandleClick()
     wagerInput:ClearFocus()
     startInput:ClearFocus()
     if mainButton:GetText() == DR.Config.strings.challenge then
-        DR.print("Handle Challenge")
+        -- DR.print("Handle Challenge")
         RequestChallenge()
     else
-        DR.print("Handle Roll")
+        -- DR.print("Handle Roll")
         RandomRoll(1, DR.roll)
     end
 end
@@ -347,7 +347,7 @@ mainButton:SetScript("OnClick", HandleClick)
 local function HandleClickSkull()
     wagerInput:ClearFocus()
     startInput:ClearFocus()
-    DR.print("Handle Challenge To The Death")
+    -- DR.print("Handle Challenge To The Death")
     RequestChallenge("death")
 end
 if DR.Config.allowToTheDeath then
