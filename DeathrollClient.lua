@@ -321,7 +321,6 @@ local function RequestChallenge(mode)
         DR.print(DR.Config.strings.waitingForServerResponse)
         return false
     end
-    DR.print("RequestToPlay")
     if not UnitIsPlayer("target") then
         DR.print(DR.Config.strings.targetMustBePlayer)
         return false
