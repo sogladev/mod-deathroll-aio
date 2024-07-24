@@ -6,11 +6,16 @@ local ADDON_NAME = "AIODeathRoll"
 local COINAGE_MAX = 2147483647
 local PLAYER_EVENT_ON_COMMAND  = 42 -- (event, player, command, chatHandler) - player is nil if command used from console. Can return false
 local MAIL_STATIONERY_GM = 61
-
-local ADDON_NAME = "AIODeathRoll"
+local State = { -- server-side state
+    PENDING = 1,
+    PROGRESS = 2,
+    COMPLETED = 3,
+}
 
 DR.Config = {
     removeGoldAtStart = true, -- default: true
+    customDbName = 'ac_eluna',
+    enableDB = true, -- default: true, should be used with removeGoldAtStart enabled, saves games that are in progress so any crashes will refund players on startup
     mail = {
         senderGUID = 1, -- Low GUID of the sender
         stationary = MAIL_STATIONERY_GM,
@@ -21,12 +26,7 @@ DR.Config = {
     timedEventDelay = 30000, -- in milliseconds, delay between clean up jobs
     timeOut = 30000, -- in milliseconds, when cleanup job runs, games without rolls for this long will time out
     -- Below need to match client
-    startRollMin = 2, -- default: 1000
-}
-
-local State = {
-    PENDING = 1,
-    PROGRESS = 2,
+    startRollMin = 1000, -- default: 1000
 }
 
 local games = {}
@@ -38,6 +38,40 @@ local function DoPayoutGold(player, payout)
         AIO.Handle(player, ADDON_NAME, "SentPayoutByMail")
     else
         player:ModifyMoney(payout)
+    end
+end
+
+-- find games that are in progress and cancel them
+local function OnLoadCancelGamesInProgress()
+    -- find games
+    local querySelect = string.format("SELECT id, challengerGUID, targetGUID, wager FROM `%s`.`deathroll` WHERE `status` = %d;", DR.Config.customDbName, State.PROGRESS)
+    local Query = CharDBQuery(querySelect)
+    local gamesInProgress = {}
+    local ids = {}
+    if Query then
+        repeat
+            local id = Query:GetInt32(0)
+            table.insert(ids, 1, id)
+            local challengerGUID = Query:GetUInt64(1)
+            local targetGUID = Query:GetUInt64(2)
+            local wager = Query:GetInt32(3)
+            table.insert(gamesInProgress, 1, {challenger = challengerGUID, target = targetGUID, wager = wager})
+        until not Query:NextRow()
+    end
+    -- refund gold to players
+    if DR.Config.removeGoldAtStart then
+        for i, game in ipairs(gamesInProgress) do
+            local player = GetPlayerByGUID(game.target)
+            local otherPlayer = GetPlayerByGUID(game.challenger)
+            local wager = game.wager
+            DoPayoutGold(player, wager)
+            DoPayoutGold(otherPlayer, wager)
+        end
+    end
+    -- cancel
+    if #ids > 0 then
+        local queryDelete = string.format("DELETE FROM `%s`.`deathroll` WHERE `id` IN (%s);", DR.Config.customDbName, table.concat(ids, ","))
+        CharDBExecute(queryDelete)
     end
 end
 
@@ -77,9 +111,15 @@ local function OnTimedEventCheckTimeout(_, _, _) -- eventId, delay, repeats
                     end
                     AIO.Handle(otherPlayer, ADDON_NAME, "YouWin", wager)
                     AIO.Handle(player, ADDON_NAME, "YouLose", wager)
+                    -- update db
+                    if DR.Config.enableDB then
+                        local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=%d WHERE `challengerGUID`=%s AND `targetGUID`=%s AND `status`=%d;",
+                            DR.Config.customDbName, State.COMPLETED, tostring(game.challenger), tostring(game.target), State.PROGRESS)
+                        CharDBExecute(queryUpdate)
+                    end
                     table.insert(toBeRemoved, i)
                 end
-            else
+            elseif game.state == State.PENDING or game.state == State.PROGRESS then
                 local timeDiff = GetTimeDiff(game.time)
                 -- check if timeout
                 if timeDiff > DR.Config.timeOut then
@@ -98,6 +138,12 @@ local function OnTimedEventCheckTimeout(_, _, _) -- eventId, delay, repeats
                             AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Timeout!")
                             AIO.Handle(otherPlayer, ADDON_NAME, "ChallengeRequestDenied", "Timeout!")
                         end
+                        -- update game in db
+                        if DR.Config.enableDB then
+                            local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=%d WHERE `challengerGUID`=%s AND `targetGUID`=%s AND `status`=%d;",
+                                DR.Config.customDbName, State.COMPLETED, tostring(game.challenger), tostring(game.target), State.PROGRESS)
+                            CharDBExecute(queryUpdate)
+                        end
                     else
                         local challenger = GetPlayerByGUID(game.challenger)
                         AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "Timeout Pending!")
@@ -109,13 +155,14 @@ local function OnTimedEventCheckTimeout(_, _, _) -- eventId, delay, repeats
     end
     -- remove games
     for i = #toBeRemoved, 1, -1 do
-        table.remove(games, toBeRemoved[i])
+        -- table.remove(games, toBeRemoved[i])
+        games[i].state = State.COMPLETED
     end
 end
 
 local function FindGame(playerGUID)
     for i, game in ipairs(games) do
-        if game and (eq(game.target,  playerGUID) or eq(game.challenger, playerGUID)) then
+        if game and (eq(game.target,  playerGUID) or eq(game.challenger, playerGUID)) and game.state ~= State.COMPLETED then
             return i
         end
     end
@@ -182,7 +229,8 @@ function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
             -- player:KillPlayer() -- broken?
             player:Kill(player, false)
         end
-        table.remove(games, i)
+        -- table.remove(games, i)
+        games[i].state = State.COMPLETED
     else
         -- continue game
         AIO.Handle(otherPlayer, ADDON_NAME, "YourTurn", rollResult)
@@ -264,7 +312,8 @@ local function HandleDeclineChallenge(player)
     AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Challenge was declined!")
     AIO.Handle(challenger, ADDON_NAME, "ChallengeRequestDenied", "Challenge was declined!")
     -- remove game
-    table.remove(games, i)
+    -- table.remove(games, i)
+    games[i].state = State.COMPLETED
 end
 
 local function HandleAcceptChallenge(player)
@@ -277,6 +326,10 @@ local function HandleAcceptChallenge(player)
         return
     end
     local game = games[i]
+    if game == nil then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "No game found to accept!")
+        return
+    end
     -- check if challenger exists
     local challenger = GetPlayerByGUID(game.challenger)
     if not challenger then
@@ -319,6 +372,13 @@ local function HandleAcceptChallenge(player)
         challenger:ModifyMoney(-game.wager)
         player:ModifyMoney(-game.wager)
     end
+    -- insert game into db
+    if DR.Config.enableDB then
+        print(game.wager)
+        local queryInsert = string.format("INSERT INTO `%s`.`deathroll` (`challengerGUID`, `targetGUID`, `wager`, `status`) VALUES (%d, %s, %s, %d);",
+            DR.Config.customDbName, tostring(game.challenger), tostring(game.target), game.wager, State.PROGRESS)
+        CharDBExecute(queryInsert)
+    end
 end
 
 local function OnCommand(event, player, command)
@@ -338,3 +398,10 @@ end
 
 RegisterPlayerEvent(PLAYER_EVENT_ON_COMMAND, OnCommand)
 CreateLuaEvent(OnTimedEventCheckTimeout, DR.Config.timedEventDelay, 0) -- infinite
+
+if DR.Config.enableDB then
+    -- Create database and table if not exists
+    CharDBQuery('CREATE DATABASE IF NOT EXISTS `' .. DR.Config.customDbName .. '`;');
+    CharDBQuery('CREATE TABLE IF NOT EXISTS `' .. DR.Config.customDbName .. '`.`deathroll` ( `id` INT UNSIGNED auto_increment NOT NULL, `challengerGUID` VARCHAR(100) NOT NULL, `targetGUID` VARCHAR(100) NOT NULL, `wager` INTEGER NOT NULL, `status` INTEGER DEFAULT 0 NULL, `time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NULL, CONSTRAINT `id` PRIMARY KEY (`id`)) AUTO_INCREMENT=1;')
+    OnLoadCancelGamesInProgress()
+end

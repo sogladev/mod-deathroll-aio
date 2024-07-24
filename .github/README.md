@@ -2,10 +2,50 @@
 
 This is a module compatible for [AzerothCore](http://www.azerothcore.org), [ElunaTrinityWotlk](https://github.com/ElunaLuaEngine/ElunaTrinityWotlk) that implements Deathroll with ElunaLUA and AIO
 
+## Features
+- challenge other player to a deathroll
+- set bet in gold
+- set start roll
+- mode to roll to the death
+- no need to be grouped
+- timeout after a set amount, refund players or award winner
+- database persistence
+- automatically awards winning player, if winnings are too large then gold is send through ingame mail
+
+## Configuration
+removeGoldAtStart: enable to take gold from players upon start of the game
+enableDB: enable database persistence, if removeGoldAtStart is enabled, on restart will refund games that were still in progress
+customize strings
+allowToTheDeath: enable/hide skull button
+
+
 ## Tested with
+AzerothCore
+ElunaTrinityWotlk
+
+## How to play:
+`.dr` to open the window
+`.dra` to accept a challenge
+`.drd` to decline a challenge, challenge can automatically timeout and decline
+
+Target another player and click "Challenge" or the "Skull". Skull will do "Challenge" and kill the losing player
 
 ## Requirements
 AIO https://github.com/Rochet2/AIO/tree/master
+
+## Database
+If config enabled, requires a table `deathroll`. This table will be auto generated on launch.
+
+These will be auto-executed on launch with `ac_eluna` changes based on your config
+
+Recorded data
+
+stores completed and in progress deathrolls
+```
+|id|challengerGUID|targetGUID|wager|status|time|
+|--|--------------|----------|-----|------|----|
+|1|94|70|10000|3|2024-07-24 21:37:43|
+```
 
 ## License
 
