@@ -7,6 +7,12 @@ local ADDON_NAME = "AIODeathRoll"
 local COINAGE_MAX = 2147483647
 local START_ROLL_MAX = 10000
 local SKULL_ICON_MSG = "|TInterface/Icons/INV_Misc_Bone_Skull_01:14:14:2:0|t"
+local State = { -- client-side state
+    IDLE = 0,
+    REQUEST = 1,
+    RECEIVED = 2,
+    PROGRESS = 3,
+}
 
 local DRHandlers = {}
 AIO.AddHandlers(ADDON_NAME, DRHandlers)
@@ -27,7 +33,7 @@ DR.Config = {
 	},
     timeBetweenGamesInSeconds = 3, -- after win/lose disable button for this amount
     -- Below need to match server
-    startRollMin = 2, -- default: 1000
+    startRollMin = 1000, -- default: 1000
 }
 
 DR.Currency = {
@@ -51,14 +57,6 @@ DR.roll = DR.startRoll
 DR.waitingForServerResponse = false
 DR.timeBetweenGamesElapsed = 0
 DR.finishedGame = false
-
-local State = {
-    IDLE = 0,
-    REQUEST = 1,
-    RECEIVED = 2,
-    PROGRESS = 3,
-}
-
 DR.isItMyTurn = false
 DR.state = State.IDLE
 
@@ -93,7 +91,8 @@ AIO.SavePosition(mainFrame)
 
 -- mainFrame: Close button
 local closeButton = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
-closeButton:SetPoint("LEFT", mainFrame.title, "RIGHT", 25, 0)
+-- closeButton:SetPoint("LEFT", mainFrame.title, "RIGHT", 25, 0)
+closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", -5, -5)
 closeButton:SetScript("OnClick", function(self)
     mainFrame:Hide()
 end)
@@ -331,8 +330,7 @@ local function RequestChallenge(mode)
     AIO.Handle(ADDON_NAME, "RequestChallenge", tonumber(guid), DR.wager, DR.startRoll, mode)
 end
 
--- Function to update button text and handle challenge
-
+-- mainButton: OnClick
 local function HandleClick()
     wagerInput:ClearFocus()
     startInput:ClearFocus()
@@ -364,10 +362,11 @@ end
 function DRHandlers.ChallengeReceived(player, name, wager, startRoll, mode)
     local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
     if mode == "death" then
-        DR.print(string.format("You have received a challenge".." to the "..SKULL_ICON_MSG.." Death "..SKULL_ICON_MSG.." ".."from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
+        DR.print(string.format("You have received a challenge".." to the "..SKULL_ICON_MSG.." Death "..SKULL_ICON_MSG.." ".."from %s for %s (1-%d)", name, wagerFormatted, startRoll))
     else
-        DR.print(string.format("You have received a challenge from %s for %s (1-%d)\ntype .dra to accept or .drd to decline this challenge!", name, wagerFormatted, startRoll))
+        DR.print(string.format("You have received a challenge from %s for %s (1-%d)", name, wagerFormatted, startRoll))
     end
+    DR.print("type .dra to accept or .drd to decline this challenge!")
     DR.state = State.RECEIVED
 end
 
@@ -492,7 +491,7 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
 end
 
 -- Show main frame
-mainFrame:Show() -- remove for release
+-- mainFrame:Show() -- remove for release
 
 function DR.SetStateToIdle()
     -- Enable inputs
