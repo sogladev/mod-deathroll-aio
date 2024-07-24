@@ -25,6 +25,7 @@ DR.Config = {
         challenge = "Challenge",
         waitingOpponent = "Waiting...",
         addonMsgPrefix = "|TInterface/ICONS/Achievement_BG_killingblow_30:14:14:2:0|t|cfffff800DeathRoll|r",
+        targetIsSelf = "You can't challenge yourself!",
         targetMustBePlayer = "Target must be a Player!",
         waitingForServerResponse = "Waiting for server response",
         gameStartReminder = "You have 30 seconds between each roll! Good luck!",
@@ -323,6 +324,10 @@ local function RequestChallenge(mode)
     DR.print("RequestToPlay")
     if not UnitIsPlayer("target") then
         DR.print(DR.Config.strings.targetMustBePlayer)
+        return false
+    end
+    if UnitName("player") == UnitName("target") then
+        DR.print(DR.Config.strings.targetIsSelf)
         return false
     end
     local guid = UnitGUID("target")

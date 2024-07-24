@@ -256,6 +256,11 @@ function DRHandlers.RequestChallenge(player, targetGUID, wager, startRoll, mode)
         AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Target has pending game or is already playing!")
         return
     end
+    -- Check if target self
+    if eq(playerGUID, targetGUID) then
+        AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", "Cannot challenge yourself!")
+        return
+    end
     -- Check startRoll
     if startRoll < DR.Config.startRollMin then
         AIO.Handle(player, ADDON_NAME, "ChallengeRequestDenied", string.format("Start roll too low, must be atleast %d", DR.Config.startRollMin))
