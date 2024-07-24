@@ -25,11 +25,11 @@ https://github.com/user-attachments/assets/50a748df-52c2-429a-90e5-02596d377733
 challenge and to the death example: https://www.youtube.com/watch?v=2YXcdoI8CQ0
 
 ## Configuration
-removeGoldAtStart: enable to take gold from players upon start of the game
-enableDB: enable database persistence, if removeGoldAtStart is enabled, on restart will refund games that were still in progress
-customize strings
-allowToTheDeath: enable/hide skull button
-set timeouts: how much time is allowed between rolls 
+- removeGoldAtStart: enable to take gold from players upon start of the game
+- enableDB: enable database persistence, if removeGoldAtStart is enabled, on restart will refund games that were still in progress
+- customize strings
+- allowToTheDeath: enable/hide skull button
+- set timeouts: how much time is allowed between rolls 
 
 ## Tested with
 AzerothCore
