@@ -31,6 +31,7 @@ DR.Config = {
         gameStartReminder = "You have 30 seconds between each roll! Good luck!",
         youAreWinner  = "You've won: %s", -- %s wager formatted
         youLost = "No luck. You've lost: %s", -- %s wager formatted
+        refund = "Your game was cancelled on server startup and are refunded: %s", -- %s wager formatted
 	},
     timeBetweenGamesInSeconds = 3, -- after win/lose disable button for this amount
     -- Below need to match server
@@ -515,6 +516,11 @@ function DR.SetStateToIdle()
     DR.state = State.IDLE
     DR.waitingForServerResponse = false
     DR.finishedGame = false
+end
+
+function DRHandlers.Refund(player, wager)
+    local wagerFormatted = DR.Currency[DR.Config.currency].ToString(wager)..DR.Currency[DR.Config.currency].txtIcon
+    DR.print(string.format(DR.Config.strings.refund, wagerFormatted))
 end
 
 mainFrame:Hide()  -- Hide the frame initially

@@ -81,12 +81,14 @@ local function HandleRefund(player)
                 local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=`status`|%d WHERE `id` = %d;", DR.Config.customDbName, State.REFUNDTARGET, game.id)
                 CharDBExecute(queryUpdate)
                 DoPayoutGold(target, wager)
+                AIO.Handle(target, ADDON_NAME, "Refund", wager)
             end
             local challenger = GetPlayerByGUID(game.challenger)
             if challenger and (game.status == State.NOTREFUNDED or game.status == (State.NOTREFUNDED+State.REFUNDTARGET)) then
                 local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=`status`|%d WHERE `id` = %d;", DR.Config.customDbName, State.REFUNDCHALLENGER, game.id)
                 CharDBExecute(queryUpdate)
                 DoPayoutGold(challenger, wager)
+                AIO.Handle(challenger, ADDON_NAME, "Refund", wager)
             end
         end
     end
