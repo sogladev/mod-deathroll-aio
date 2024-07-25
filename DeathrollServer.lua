@@ -48,7 +48,6 @@ end
 -- find games that are in progress and cancel them
 local function OnLoadSetGamesInProgressToRefund()
     local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=%d WHERE `status` = %d;", DR.Config.customDbName, State.NOTREFUNDED, State.PROGRESS)
-    PrintError(queryUpdate)
     CharDBQuery(queryUpdate)
 end
 
@@ -59,7 +58,6 @@ end
 local function HandleRefund(player)
     -- .refund
     -- grab games where status State.NOTREFUNDED
-    PrintError("HANDLE REFUND")
     local playerGUID = player:GetGUID()
     local querySelect = string.format("SELECT id, challengerGUID, targetGUID, wager, status FROM `%s`.`deathroll` WHERE `status` & %d;", DR.Config.customDbName, State.NOTREFUNDED)
     local Query = CharDBQuery(querySelect)
@@ -78,33 +76,25 @@ local function HandleRefund(player)
     if DR.Config.removeGoldAtStart then
         for i, game in ipairs(gamesNotYetRefunded) do
             local target = GetPlayerByGUID(game.target)
-            print("TARGET STATUS")
-            print(game.target)
-            print(game.status)
             local wager = game.wager
             if target and (game.status == State.NOTREFUNDED or game.status == (State.NOTREFUNDED+State.REFUNDCHALLENGER)) then
-                print("PLAYER")
                 local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=`status`|%d WHERE `id` = %d;", DR.Config.customDbName, State.REFUNDTARGET, game.id)
-                PrintInfo(queryUpdate)
                 CharDBExecute(queryUpdate)
                 DoPayoutGold(target, wager)
             end
             local challenger = GetPlayerByGUID(game.challenger)
             if challenger and (game.status == State.NOTREFUNDED or game.status == (State.NOTREFUNDED+State.REFUNDTARGET)) then
-                print("OTHERPLAYER")
                 local queryUpdate = string.format("UPDATE `%s`.`deathroll` SET `status`=`status`|%d WHERE `id` = %d;", DR.Config.customDbName, State.REFUNDCHALLENGER, game.id)
-                PrintInfo(queryUpdate)
                 CharDBExecute(queryUpdate)
                 DoPayoutGold(challenger, wager)
             end
         end
     end
     -- delete game if everyone is refunded
-    -- if #gamesNotYetRefunded > 0 then
+    if #gamesNotYetRefunded > 0 then
         local queryDelete = string.format("DELETE FROM `%s`.`deathroll` WHERE `status`=(4|8|16);", DR.Config.customDbName)
-        print("ELETE")
         CharDBExecute(queryDelete)
-    -- end
+    end
 end
 
 -- handle games by time out
@@ -407,7 +397,6 @@ local function HandleAcceptChallenge(player)
     end
     -- insert game into db
     if DR.Config.enableDB then
-        print(game.wager)
         local queryInsert = string.format("INSERT INTO `%s`.`deathroll` (`challengerGUID`, `targetGUID`, `wager`, `status`) VALUES (%d, %s, %s, %d);",
             DR.Config.customDbName, tostring(game.challenger), tostring(game.target), game.wager, State.PROGRESS)
         CharDBExecute(queryInsert)
@@ -428,6 +417,7 @@ local function OnCommand(event, player, command)
         return false
     end
     if command == "drrefund" then
+        PrintInfo(string.format("%s:OnCommand .drrefund by account-name (%d-%s)", ADDON_NAME, player:GetAccountId(), player:GetName()))
         HandleRefund(player)
         return false
     end
