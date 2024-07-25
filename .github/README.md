@@ -17,7 +17,7 @@ ui:
 ![deathroll_ui](https://github.com/user-attachments/assets/1fbe1299-3366-45fc-87c5-6b194272fa46)
 
 
-to the death example: 
+to the death example:
 
 https://github.com/user-attachments/assets/50a748df-52c2-429a-90e5-02596d377733
 
@@ -29,7 +29,7 @@ challenge and to the death example: https://www.youtube.com/watch?v=2YXcdoI8CQ0
 - enableDB: enable database persistence, if removeGoldAtStart is enabled, on restart will refund games that were still in progress
 - customize strings
 - allowToTheDeath: enable/hide skull button
-- set timeouts: how much time is allowed between rolls 
+- set timeouts: how much time is allowed between rolls
 
 ## Tested with
 AzerothCore
@@ -39,6 +39,7 @@ ElunaTrinityWotlk
 - `.dr` to open the window
 - `.dra` to accept a challenge
 - `.drd` to decline a challenge, challenge can automatically timeout and decline
+- `.drrefund` request refund if there was a server issue
 
 Target another player and click "Challenge" or the "Skull". Skull will do "Challenge" and kill the losing player
 
