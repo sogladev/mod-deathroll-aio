@@ -494,9 +494,6 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     DR.state = State.PROGRESS
 end
 
--- Show main frame
--- mainFrame:Show() -- remove for release
-
 function DR.SetStateToIdle()
     -- Enable inputs
     if DR.Config.allowToTheDeath then -- create DR.skullButton
@@ -519,3 +516,5 @@ function DR.SetStateToIdle()
     DR.waitingForServerResponse = false
     DR.finishedGame = false
 end
+
+mainFrame:Hide()  -- Hide the frame initially
