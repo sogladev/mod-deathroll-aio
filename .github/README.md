@@ -39,6 +39,7 @@ ElunaTrinityWotlk
 - `.dr` to open the window
 - `.dra` to accept a challenge
 - `.drd` to decline a challenge, challenge can automatically timeout and decline
+- `.drroll` to roll without using the gui
 - `.drrefund` request refund if there was a server issue
 
 Target another player and click "Challenge" or the "Skull". Skull will do "Challenge" and kill the losing player
