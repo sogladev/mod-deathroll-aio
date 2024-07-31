@@ -28,7 +28,7 @@ DR.Config = {
         targetIsSelf = "You can't challenge yourself!",
         targetMustBePlayer = "Target must be a Player!",
         waitingForServerResponse = "Waiting for server response",
-        gameStartReminder = "You have 30 seconds between each roll! Good luck!",
+        gameStartReminder = "Type .drroll or click the roll button to roll. You have 30 seconds between each roll. Good luck!",
         youAreWinner  = "You've won: %s", -- %s wager formatted
         youLost = "No luck. You've lost: %s", -- %s wager formatted
         refund = "Your game was cancelled on server startup and are refunded: %s", -- %s wager formatted
@@ -284,38 +284,6 @@ local function UpdateRolls(newRoll)
     rollsText:SetText(table.concat(lines, "\n"))
 end
 
--- Function to handle system chat messages and detect rolls
-local function OnChatMsgSystem(self, event, msg)
-    if DR.state ~= State.PROGRESS or not DR.isItMyTurn then
-        return
-    end
-    local playerName, rollResult, minRoll, maxRoll = msg:match("^(.+) rolls (%d+) %((%d+)%-(%d+)%)")
-    if not (playerName and rollResult and minRoll and maxRoll) then
-        return
-    end
-    if DR.isItMyTurn and playerName == GetUnitName("player") then
-        AIO.Handle(ADDON_NAME, "Rolled", rollResult, minRoll, maxRoll)
-        DR.waitingForServerResponse = true
-        DR.isItMyTurn = false
-        mainButton:SetText(DR.Config.strings.waitingOpponent)
-        mainButton:Disable()
-    end
-end
-
--- Set a single OnEvent handler for both events
-mainFrame:SetScript("OnEvent", function(self, event, msg, ...)
-    if event == "CHAT_MSG_SYSTEM" then
-        self:OnChatMsgSystem(event, msg)
-    elseif event == "PLAYER_REGEN_DISABLED" then
-        -- self:OnPlayerRegenDisabled(...)
-    elseif event == "PLAYER_REGEN_ENABLED" then
-        -- self:OnPlayerRegenEnabled(...)
-    end
-end)
--- Register event for system chat messages
-mainFrame:RegisterEvent("CHAT_MSG_SYSTEM")
-mainFrame:SetScript("OnEvent", OnChatMsgSystem)
-
 local function RequestChallenge(mode)
     UpdateWagerFromInput()
     if DR.waitingForServerResponse then
@@ -335,6 +303,19 @@ local function RequestChallenge(mode)
     AIO.Handle(ADDON_NAME, "RequestChallenge", tonumber(guid), DR.wager, DR.startRoll, mode)
 end
 
+local function RequestRoll()
+    if DR.state ~= State.PROGRESS or not DR.isItMyTurn then
+        return
+    end
+    if DR.isItMyTurn then
+        AIO.Handle(ADDON_NAME, "Roll")
+        DR.waitingForServerResponse = true
+        DR.isItMyTurn = false
+        mainButton:SetText(DR.Config.strings.waitingOpponent)
+        mainButton:Disable()
+    end
+end
+
 -- mainButton: OnClick
 local function HandleClick()
     wagerInput:ClearFocus()
@@ -344,7 +325,7 @@ local function HandleClick()
         RequestChallenge()
     else
         -- DR.print("Handle Roll")
-        RandomRoll(1, DR.roll)
+        RequestRoll()
     end
 end
 mainButton:SetScript("OnClick", HandleClick)
@@ -397,9 +378,12 @@ function DRHandlers.RollMessage(player, reason)
     mainButton:Enable()
 end
 
+function DRHandlers.YouRolled(player, roll, maxRoll)
+    DR.print(string.format("%s rolls %s (1-%s)", UnitName("player"), roll, maxRoll))
+end
+
 function DRHandlers.YourTurn(player, maxRoll)
     DR.print(string.format("Your opponent rolled %s", maxRoll))
-    DR.print(string.format("/roll %d", maxRoll))
     DR.isItMyTurn = true
     DR.waitingForServerResponse = false
     DR.roll = maxRoll
@@ -475,7 +459,7 @@ function DRHandlers.StartGame(player, name, wager, startRoll, firstRoll)
     if firstRoll then
         DR.isItMyTurn = true
         DR.waitingForServerResponse = false
-        startString = string.format("You start first! /roll %d", startRoll)
+        startString = "You start first!"
         mainButton:SetText("Roll "..startRoll)
         mainButton:Enable()
     else

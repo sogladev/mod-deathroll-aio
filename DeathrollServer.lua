@@ -189,7 +189,7 @@ local function FindGame(playerGUID)
     return 0
 end
 
-function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
+function DRHandlers.Roll(player)
     local playerGUID = player:GetGUID()
     local i = FindGame(playerGUID)
     if not i then
@@ -197,30 +197,21 @@ function DRHandlers.Rolled(player, rollResult, minRoll, maxRoll)
         return
     end
     local game = games[i]
-    -- found game
+    -- do roll
+    local maxRoll = game.rolls and game.rolls[1].result or game.startRoll
+    local rollResult = math.random(1,maxRoll)
     local roll = { -- only store valid rolls
         player = playerGUID,
         result = rollResult,
         max = maxRoll,
         time = GetCurrTime(),
     }
+    AIO.Handle(player, ADDON_NAME, "YouRolled", rollResult, maxRoll)
+    -- add roll
     if not game.rolls then
         -- first roll
-        -- verify roll
-        if not eq(maxRoll, game.startRoll) or not eq(minRoll, 1) then
-            AIO.Handle(player, ADDON_NAME, "RollMessage", string.format("Expecting: /roll %d", game.startRoll))
-            return
-        end
-        -- add roll
         games[i].rolls = {roll}
     else
-        local previousRoll = game.rolls[1]
-        -- verify roll
-        if not eq(maxRoll, previousRoll.result) or not eq(minRoll, 1) then
-            AIO.Handle(player, ADDON_NAME, "RollMessage", string.format("Expecting: /roll %d", previousRoll.result))
-            return
-        end
-        -- add roll
         table.insert(games[i].rolls, 1, roll)
     end
     -- determine who is other player
@@ -408,6 +399,10 @@ end
 local function OnCommand(event, player, command)
     if command == "dr" then
         AIO.Handle(player, ADDON_NAME, "ShowFrame")
+        return false
+    end
+    if command == "drroll" then
+        DRHandlers.Roll(player)
         return false
     end
     if command == "dra" then
